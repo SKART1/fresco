@@ -5,22 +5,31 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 public interface DiskCacheInterface {
-  InfoStruct getFile(String url);
+  CacheInfo getCacheInfo(String url);
 
-  InputStream getInputStream(InfoStruct infoStruct);
+  InputStream getInputStream(CacheInfo cacheInfo);
 
-  OutputStream getOutputStream(InfoStruct infoStruct);
+  OutputStream getOutputStream(CacheInfo cacheInfo);
 
   void clearCache();
 
-  void onFinished(InfoStruct infoStruct);
+  void onFinished(CacheInfo cacheInfo);
 
-  void onError(InfoStruct infoStruct, Throwable throwable);
+  void onError(CacheInfo cacheInfo, Throwable throwable);
 
-  class InfoStruct {
+  class CacheInfo {
+    public static final int NO_OFFSET = -7;
+    public static final int NO_FILENAME = -8;
+
     private int fileName;
     private int fileOffset;
     private File file;
+
+    public CacheInfo() {
+      fileName = NO_OFFSET;
+      fileOffset = NO_FILENAME;
+      file = null;
+    }
 
     public int getFileName() {
       return fileName;
@@ -50,17 +59,17 @@ public interface DiskCacheInterface {
 
   public static class DumbDiskCahce implements DiskCacheInterface {
     @Override
-    public InfoStruct getFile(String url) {
+    public CacheInfo getCacheInfo(String url) {
+      return new CacheInfo();
+    }
+
+    @Override
+    public InputStream getInputStream(CacheInfo cacheInfo) {
       return null;
     }
 
     @Override
-    public InputStream getInputStream(InfoStruct infoStruct) {
-      return null;
-    }
-
-    @Override
-    public OutputStream getOutputStream(InfoStruct infoStruct) {
+    public OutputStream getOutputStream(CacheInfo cacheInfo) {
       return null;
     }
 
@@ -70,12 +79,12 @@ public interface DiskCacheInterface {
     }
 
     @Override
-    public void onFinished(InfoStruct infoStruct) {
+    public void onFinished(CacheInfo cacheInfo) {
 
     }
 
     @Override
-    public void onError(InfoStruct infoStruct, Throwable throwable) {
+    public void onError(CacheInfo cacheInfo, Throwable throwable) {
 
     }
   }

@@ -34,12 +34,13 @@ import com.facebook.drawee.generic.GenericDraweeHierarchyBuilder;
 import com.facebook.drawee.interfaces.DraweeController;
 import com.facebook.drawee.view.SimpleDraweeView;
 import com.facebook.imagepipeline.cache.DiskCache;
+import com.facebook.imagepipeline.cache.DiskCacheInterface;
 import com.facebook.imagepipeline.core.ImagePipeline;
 import com.facebook.imagepipeline.core.ImagePipelineConfig;
 import com.facebook.imagepipeline.image.ImageInfo;
 import com.facebook.imagepipeline.listener.RequestListener;
 import com.facebook.imagepipeline.listener.RequestLoggingListener;
-import com.facebook.imagepipeline.producers.SmartCachingFetcher;
+import com.facebook.imagepipeline.producers.ResumeDownloadFetcher;
 
 
 public class MainActivity extends Activity {
@@ -53,10 +54,10 @@ public class MainActivity extends Activity {
     Set<RequestListener> listeners = new HashSet<>();
     listeners.add(new RequestLoggingListener());
 
-    final DiskCache diskCache = DiskCache.getInstance(this);
+    final DiskCacheInterface diskCache = new DiskCacheInterface.DumbDiskCahce();//DiskCache.getInstance(this);
 
     ImagePipelineConfig config = ImagePipelineConfig.newBuilder(this)
-            .setNetworkFetcher(new SmartCachingFetcher(diskCache))
+            .setNetworkFetcher(new ResumeDownloadFetcher(diskCache))
             .setRequestListeners(listeners)
             .build();
     Fresco.initialize(this, config);

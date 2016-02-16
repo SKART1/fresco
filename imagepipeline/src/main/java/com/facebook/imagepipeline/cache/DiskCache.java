@@ -24,7 +24,7 @@ public class DiskCache implements DiskCacheInterface {
   private static final String DISK_CACHE_SUBDIR = "thumbnails";
 
   //Singleton
-  private static DiskCache diskCache = null;
+  private static volatile DiskCache diskCache = null;
 
   private Semaphore writeLock = new Semaphore(1);
   private final ConcurrentHashMap<Integer, Boolean> concurrentHashMap = new ConcurrentHashMap<>(6);
@@ -65,31 +65,35 @@ public class DiskCache implements DiskCacheInterface {
 
 
   @Override
-  public InfoStruct getFile(String url) {
-    InfoStruct infoStruct = new InfoStruct();
+  public CacheInfo getCacheInfo(String url) {
+    CacheInfo cacheInfo = new CacheInfo();
 
-    infoStruct.setFileName(url.hashCode());
+    cacheInfo.setFileName(url.hashCode());
 
     //
-    File fileInp = new File(cacheDir, String.valueOf(infoStruct.getFileName()));
+    File fileInp = new File(cacheDir, String.valueOf(cacheInfo.getFileName()));
 
 
     if(fileInp.length() < Integer.MAX_VALUE) {
-      infoStruct.setFileOffset((int) fileInp.length());
+      cacheInfo.setFileOffset((int) fileInp.length());
     } else {
-      infoStruct.setFileOffset(0);
+      cacheInfo.setFileOffset(0);
     }
 
-    infoStruct.setFile(fileInp);
+    cacheInfo.setFile(fileInp);
 
-    return infoStruct;
+    return cacheInfo;
   }
 
   @Override
-  public InputStream getInputStream(InfoStruct infoStruct) {
+  public InputStream getInputStream(CacheInfo cacheInfo) {
+    if(cacheInfo == null){
+      return null;
+    }
+
     InputStream is = null;
     try {
-      File file = infoStruct.getFile();
+      File file = cacheInfo.getFile();
       if (!file.exists()) {
         if (file.createNewFile()) {
           is = new FileInputStream(file);
@@ -104,16 +108,21 @@ public class DiskCache implements DiskCacheInterface {
   }
 
   @Override
-  public OutputStream getOutputStream(InfoStruct infoStruct) {
+  public OutputStream getOutputStream(CacheInfo cacheInfo) {
     FileOutputStream fileOutputStream = null;
+
+    if(cacheInfo == null){
+      return null;
+    }
+
     try {
-      File file = infoStruct.getFile();
+      File file = cacheInfo.getFile();
       if (!file.exists()) {
         if (file.createNewFile()) {
-          fileOutputStream = getOutputStreamMonopole(infoStruct);
+          fileOutputStream = getOutputStreamMonopole(cacheInfo);
         }
       } else {
-        fileOutputStream = getOutputStreamMonopole(infoStruct);
+        fileOutputStream = getOutputStreamMonopole(cacheInfo);
       }
     } catch (IOException e) {
       e.printStackTrace();
@@ -122,15 +131,15 @@ public class DiskCache implements DiskCacheInterface {
   }
 
   @Nullable
-  private FileOutputStream getOutputStreamMonopole(InfoStruct infoStruct) throws FileNotFoundException {
+  private FileOutputStream getOutputStreamMonopole(CacheInfo cacheInfo) throws FileNotFoundException {
     try {
       writeLock.acquire();
-      Boolean isProcessing = concurrentHashMap.putIfAbsent(infoStruct.getFileName(), false);
+      Boolean isProcessing = concurrentHashMap.putIfAbsent(cacheInfo.getFileName(), false);
 
       if (isProcessing != null && isProcessing) {
         FLog.e(DiskCache.class.getName(), " Multiply writers to one file!");
       } else {
-        return new FileOutputStream(infoStruct.getFile(), true);
+        return new FileOutputStream(cacheInfo.getFile(), true);
       }
 
     } catch (InterruptedException e) {
@@ -148,12 +157,12 @@ public class DiskCache implements DiskCacheInterface {
   }
 
   @Override
-  public void onFinished(InfoStruct infoStruct) {
+  public void onFinished(CacheInfo cacheInfo) {
     try {
       writeLock.acquire();
 
-      if (infoStruct.getFile().delete()) {
-        concurrentHashMap.remove(infoStruct.getFileName());
+      if (cacheInfo.getFile().delete()) {
+        concurrentHashMap.remove(cacheInfo.getFileName());
       }
     } catch (InterruptedException e) {
       e.printStackTrace();
@@ -163,11 +172,11 @@ public class DiskCache implements DiskCacheInterface {
   }
 
   @Override
-  public void onError(InfoStruct infoStruct, Throwable throwable) {
+  public void onError(CacheInfo cacheInfo, Throwable throwable) {
     try {
       writeLock.acquire();
 
-      concurrentHashMap.put(infoStruct.getFileName(), false);
+      concurrentHashMap.put(cacheInfo.getFileName(), false);
     } catch (InterruptedException e) {
       e.printStackTrace();
     } finally {

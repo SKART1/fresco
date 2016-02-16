@@ -3,7 +3,6 @@ package com.facebook.imagepipeline.producers;
 import android.net.Uri;
 
 import com.facebook.common.logging.FLog;
-import com.facebook.imagepipeline.cache.DiskCache;
 import com.facebook.imagepipeline.cache.DiskCacheInterface;
 import com.facebook.imagepipeline.image.EncodedImage;
 
@@ -16,18 +15,19 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /**
- * Created by art on 2/4/16.
+ * This class
+ *
  */
-public class SmartCachingFetcher extends BaseNetworkFetcher<FetchState> {
-  private static final String TAG = SmartCachingFetcher.class.getName();
+public class ResumeDownloadFetcher extends BaseNetworkFetcher<FetchState> {
+  private static final String TAG = ResumeDownloadFetcher.class.getName();
 
   private static final int NUM_NETWORK_THREADS = 3;
 
   private final ExecutorService mExecutorService;
-  private DiskCache diskCache;
+  private DiskCacheInterface diskCache;
 
 
-  public SmartCachingFetcher(DiskCache diskCache) {
+  public ResumeDownloadFetcher(DiskCacheInterface diskCache) {
     this.diskCache = diskCache;
     mExecutorService = Executors.newFixedThreadPool(NUM_NETWORK_THREADS);
   }
@@ -53,19 +53,24 @@ public class SmartCachingFetcher extends BaseNetworkFetcher<FetchState> {
                 String scheme = uri.getScheme();
                 String uriString = fetchState.getUri().toString();
 
-                DiskCacheInterface.InfoStruct infoStruct = diskCache.getFile(uriString);
+                DiskCacheInterface.CacheInfo cacheInfo = diskCache.getCacheInfo(uriString);
 
                 while (true) {
                   String nextUriString;
                   String nextScheme;
 
                   try {
-                    final String rangeHeader = "bytes=" + infoStruct.getFileOffset() + "-";
-                    FLog.w(TAG, "Trying offset value: " + infoStruct.getFileOffset());
-
                     URL url = new URL(uriString);
                     connection = (HttpURLConnection) url.openConnection();
-                    connection.setRequestProperty("Range", rangeHeader);
+
+                    if(cacheInfo.getFileOffset() != DiskCacheInterface.CacheInfo.NO_OFFSET) {
+                      FLog.w(TAG, "Trying offset value: " + cacheInfo.getFileOffset());
+
+                      final  String rangeHeader = "bytes=" + cacheInfo.getFileOffset() + "-";
+                      connection.setRequestProperty("Range", rangeHeader);
+                    } else {
+                      FLog.w(TAG, "No offset value");
+                    }
 
                     nextUriString = connection.getHeaderField("Location");
                     nextScheme = (nextUriString == null) ? null : Uri.parse(nextUriString).getScheme();
@@ -78,10 +83,10 @@ public class SmartCachingFetcher extends BaseNetworkFetcher<FetchState> {
                       //If response is 206 (allows partitioning)
                       if (connection.getResponseCode() == HttpURLConnection.HTTP_PARTIAL) {
 
-                        firstInputStream = diskCache.getInputStream(infoStruct);
+                        firstInputStream = diskCache.getInputStream(cacheInfo);
                         secondInputStream = connection.getInputStream();
 
-                        outputStream = diskCache.getOutputStream(infoStruct);
+                        outputStream = diskCache.getOutputStream(cacheInfo);
                         is = new DoubleSourceStream(firstInputStream, secondInputStream, outputStream);
                       } else {
                         is = connection.getInputStream();
@@ -94,13 +99,13 @@ public class SmartCachingFetcher extends BaseNetworkFetcher<FetchState> {
                       }
 
                       callback.onResponse(is, contentLengthValue);
-                      diskCache.onFinished(infoStruct);
+                      diskCache.onFinished(cacheInfo);
                       break;
                     }
                     uriString = nextUriString;
                     scheme = nextScheme;
                   } catch (Exception e) {
-                    diskCache.onError(infoStruct, e);
+                    diskCache.onError(cacheInfo, e);
                     callback.onFailure(e);
                     break;
                   } finally {
