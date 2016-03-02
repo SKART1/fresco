@@ -54,7 +54,7 @@ public class MainActivity extends Activity {
     Set<RequestListener> listeners = new HashSet<>();
     listeners.add(new RequestLoggingListener());
 
-    final DiskCacheInterface diskCache = new DiskCacheInterface.DumbDiskCahce();//DiskCache.getInstance(this);
+    final DiskCacheInterface diskCache = DiskCache.getInstance(this);
 
     ImagePipelineConfig config = ImagePipelineConfig.newBuilder(this)
             .setNetworkFetcher(new ResumeDownloadFetcher(diskCache))

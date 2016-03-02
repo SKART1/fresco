@@ -22,12 +22,13 @@ import java.util.concurrent.Semaphore;
  */
 public class DiskCache implements DiskCacheInterface {
   private static final String DISK_CACHE_SUBDIR = "thumbnails";
+  public static final String TAG = DiskCache.class.getName();
 
   //Singleton
   private static volatile DiskCache diskCache = null;
 
   private Semaphore writeLock = new Semaphore(1);
-  private final ConcurrentHashMap<Integer, Boolean> concurrentHashMap = new ConcurrentHashMap<>(6);
+  private final ConcurrentHashMap<Integer, Boolean> fileLocks = new ConcurrentHashMap<>(6);
 
   private File cacheDir;
 
@@ -53,7 +54,7 @@ public class DiskCache implements DiskCacheInterface {
       File[] files = cacheDir.listFiles();
       for (File file : files) {
         if (!file.isDirectory()) {
-          concurrentHashMap.putIfAbsent(file.getName().hashCode(), false);
+          fileLocks.put(file.getName().hashCode(), false);
         }
       }
     } catch (InterruptedException e) {
@@ -73,10 +74,27 @@ public class DiskCache implements DiskCacheInterface {
     //
     File fileInp = new File(cacheDir, String.valueOf(cacheInfo.getFileName()));
 
+    if(fileInp.exists()) {
+      try {
+        writeLock.acquire();
+        Boolean isProcessing = fileLocks.putIfAbsent(cacheInfo.getFileName(), false);
 
-    if(fileInp.length() < Integer.MAX_VALUE) {
-      cacheInfo.setFileOffset((int) fileInp.length());
+        //Somebody have taken this file before us
+        if (isProcessing != null && isProcessing) {
+          FLog.e(TAG, " File already lock readers for one file!");
+          cacheInfo.setFileOffset(0);
+        } else {
+          fileLocks.put(cacheInfo.getFileName(), true);
+          cacheInfo.setFileOffset(fileInp.length());
+        }
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      } finally {
+        writeLock.release();
+      }
     } else {
+      //Atomic fileCreate will deal with this if there are multiply
+      // simultaneously not created files
       cacheInfo.setFileOffset(0);
     }
 
@@ -119,37 +137,16 @@ public class DiskCache implements DiskCacheInterface {
       File file = cacheInfo.getFile();
       if (!file.exists()) {
         if (file.createNewFile()) {
-          fileOutputStream = getOutputStreamMonopole(cacheInfo);
+          fileOutputStream = new FileOutputStream(cacheInfo.getFile());
         }
       } else {
-        fileOutputStream = getOutputStreamMonopole(cacheInfo);
+        fileOutputStream = new FileOutputStream(cacheInfo.getFile());
       }
     } catch (IOException e) {
       e.printStackTrace();
     }
     return fileOutputStream;
   }
-
-  @Nullable
-  private FileOutputStream getOutputStreamMonopole(CacheInfo cacheInfo) throws FileNotFoundException {
-    try {
-      writeLock.acquire();
-      Boolean isProcessing = concurrentHashMap.putIfAbsent(cacheInfo.getFileName(), false);
-
-      if (isProcessing != null && isProcessing) {
-        FLog.e(DiskCache.class.getName(), " Multiply writers to one file!");
-      } else {
-        return new FileOutputStream(cacheInfo.getFile(), true);
-      }
-
-    } catch (InterruptedException e) {
-      e.printStackTrace();
-    } finally {
-      writeLock.release();
-    }
-    return null;
-  }
-
 
   @Override
   public void clearCache() {
@@ -162,7 +159,7 @@ public class DiskCache implements DiskCacheInterface {
       writeLock.acquire();
 
       if (cacheInfo.getFile().delete()) {
-        concurrentHashMap.remove(cacheInfo.getFileName());
+        fileLocks.remove(cacheInfo.getFileName());
       }
     } catch (InterruptedException e) {
       e.printStackTrace();
@@ -176,7 +173,7 @@ public class DiskCache implements DiskCacheInterface {
     try {
       writeLock.acquire();
 
-      concurrentHashMap.put(cacheInfo.getFileName(), false);
+      fileLocks.put(cacheInfo.getFileName(), false);
     } catch (InterruptedException e) {
       e.printStackTrace();
     } finally {

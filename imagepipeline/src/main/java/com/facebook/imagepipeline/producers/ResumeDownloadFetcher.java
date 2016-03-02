@@ -15,7 +15,20 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 /**
- * This class
+ * This class is a special fetcher which will try:
+ *    * When new request come, fetcher asks #DiskCacheInterface if any intermediate progress is saved
+ *      locally. #DiskCacheInterface provide with all necessary information about previous progress,
+ *      allowing this fetcher to set required HTTP v1.1+ headers to continue just from the same position
+ *      it have stop before. Fetcher deals with cases when server do not support download resuming -
+ *      its just returns standard #InputStream. But when servers response it support such thing - then
+ *      all the stuff is done :)
+ *      Using #DoubleSourceStream information fetched from internet will be saved in output stream
+ *
+ *    * Save intermediate download progress in #OutputStream provided by #DiskCacheInterface.
+ *      While downloading media from internet it`s bytes will be appended just at the end of #OutputStream.
+ *      Actually this action is done by {@see #DoubleSourceStream}. About cache which provide streams and manage files see
+ *      interface {@see #com.facebook.imagepipeline.cache.DiskCacheInterface} and its implementation
+ *      {@see #com.facebook.imagepipeline.cache.DiskCache} and {@see #com.facebook.imagepipeline.cache.DiskCacheInterface.DumbDiskCache}.
  *
  */
 public class ResumeDownloadFetcher extends BaseNetworkFetcher<FetchState> {
@@ -87,7 +100,8 @@ public class ResumeDownloadFetcher extends BaseNetworkFetcher<FetchState> {
                         secondInputStream = connection.getInputStream();
 
                         outputStream = diskCache.getOutputStream(cacheInfo);
-                        is = new DoubleSourceStream(firstInputStream, secondInputStream, outputStream);
+                        is = new DoubleSourceStream(firstInputStream, cacheInfo.getFileOffset(),
+                                secondInputStream, outputStream);
                       } else {
                         is = connection.getInputStream();
                       }

@@ -4,6 +4,18 @@ import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
 
+/**
+ * DiskCacheInterface is responsible for storing, managing and cleaning intermediate downloaded progress
+ * locally and providing all necessary information about it. There are some things that you should
+ * store in your mind when implementing it:
+ *  * One file must give one output stream
+ *  * One file must always give one output stream - seriously, dude, if two streams will open same
+ *    file ugly things may happen. Multiply outputStreams have shared position in file, so if writing batches
+ *    after batches to multiply output streams there will be mess in output
+ *    (nevertheless Java provide with atomic write).
+ *  * Provide correct file size
+ *  * Closing files is also important.
+ */
 public interface DiskCacheInterface {
   CacheInfo getCacheInfo(String url);
 
@@ -22,7 +34,7 @@ public interface DiskCacheInterface {
     public static final int NO_FILENAME = -8;
 
     private int fileName;
-    private int fileOffset;
+    private long fileOffset;
     private File file;
 
     public CacheInfo() {
@@ -39,11 +51,11 @@ public interface DiskCacheInterface {
       this.fileName = fileName;
     }
 
-    public int getFileOffset() {
+    public long getFileOffset() {
       return fileOffset;
     }
 
-    public void setFileOffset(int fileOffset) {
+    public void setFileOffset(long fileOffset) {
       this.fileOffset = fileOffset;
     }
 
@@ -57,7 +69,10 @@ public interface DiskCacheInterface {
   }
 
 
-  public static class DumbDiskCahce implements DiskCacheInterface {
+  /**
+   * Cache which do nothing but still works!
+   */
+  public static class DumbDiskCache implements DiskCacheInterface {
     @Override
     public CacheInfo getCacheInfo(String url) {
       return new CacheInfo();

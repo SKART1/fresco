@@ -15,7 +15,10 @@ import java.io.OutputStream;
 public class DoubleSourceStream extends InputStream {
   private static final String TAG = DoubleSourceStream.class.getName();
 
+  private static final int INFINITY_LENGTH = -4567;
+
   private InputStream firstInputStream;
+  private final int firstInputStreamLength;
   private InputStream secondInputStream;
 
   private OutputStream firstOutputStream;
@@ -25,9 +28,11 @@ public class DoubleSourceStream extends InputStream {
   private int secondInputStreamTotalRead = 0;
 
   public DoubleSourceStream(InputStream firstInputStream,
-                            @NonNull InputStream secondInputStream,
+                            int firstInputStreamLength, @NonNull InputStream secondInputStream,
                             OutputStream firstOutputStream) {
     this.firstInputStream = firstInputStream;
+    this.firstInputStreamLength = firstInputStreamLength;
+
     this.secondInputStream = secondInputStream;
 
     this.firstOutputStream = firstOutputStream;
@@ -71,14 +76,23 @@ public class DoubleSourceStream extends InputStream {
     if (!firstEnds) {
       value = firstInputStream.read();
       if (value != -1) {
+        firstInputStreamTotalRead++;
+
+        if(firstInputStreamTotalRead == firstInputStreamLength) {
+          firstEnds = true;
+        }
         return value;
       }
       firstEnds = true;
     }
     value = secondInputStream.read();
 
-    if (firstOutputStream != null && value != -1) {
-      firstOutputStream.write(value);
+    if (value != -1) {
+      secondInputStreamTotalRead++;
+
+      if (firstOutputStream != null) {
+        firstOutputStream.write(value);
+      }
     }
 
     return value;
@@ -90,14 +104,23 @@ public class DoubleSourceStream extends InputStream {
 
     int bytesRead;
     if (!firstEnds) {
-      bytesRead = firstInputStream.read(buffer, byteOffset, byteCount);
+      int byteCountCorrected = byteCount;
+
+      if(firstInputStreamTotalRead + byteCount >= firstInputStreamLength) {
+        byteCountCorrected = firstInputStreamLength - firstInputStreamTotalRead;
+        firstEnds = true;
+
+        FLog.w(TAG, "FirstInputStream ended. Totally read " + firstInputStreamTotalRead);
+      }
+
+      bytesRead = firstInputStream.read(buffer, byteOffset, byteCountCorrected);
       if (bytesRead != -1) {
         firstInputStreamTotalRead += bytesRead;
         FLog.w(TAG, "Read from firstInputStream " + bytesRead + " bytes. Totally read from source: " + firstInputStreamTotalRead + " bytes");
 
         return bytesRead;
       }
-      FLog.w(TAG, "FirstInputStream ended. Totally read " + firstInputStreamTotalRead);
+
       firstEnds = true;
     }
 
