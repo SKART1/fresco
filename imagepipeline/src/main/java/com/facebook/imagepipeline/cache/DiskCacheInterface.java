@@ -1,5 +1,8 @@
 package com.facebook.imagepipeline.cache;
 
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -17,7 +20,7 @@ import java.io.OutputStream;
  *  * Closing files is also important.
  */
 public interface DiskCacheInterface {
-  CacheInfo getCacheInfo(String url);
+  @NonNull CacheInfo getCacheInfo(String url);
 
   InputStream getInputStream(CacheInfo cacheInfo);
 
@@ -35,11 +38,11 @@ public interface DiskCacheInterface {
 
     private int fileName;
     private long fileOffset;
-    private File file;
+    private @Nullable File file;
 
     public CacheInfo() {
-      fileName = NO_OFFSET;
-      fileOffset = NO_FILENAME;
+      fileName = NO_FILENAME;
+      fileOffset = NO_OFFSET;
       file = null;
     }
 
@@ -59,11 +62,12 @@ public interface DiskCacheInterface {
       this.fileOffset = fileOffset;
     }
 
+    @Nullable
     public File getFile() {
       return file;
     }
 
-    public void setFile(File file) {
+    public void setFile(@Nullable File  file) {
       this.file = file;
     }
   }
@@ -72,7 +76,8 @@ public interface DiskCacheInterface {
   /**
    * Cache which do nothing but still works!
    */
-  public static class DumbDiskCache implements DiskCacheInterface {
+  class DumbDiskCache implements DiskCacheInterface {
+    @NonNull
     @Override
     public CacheInfo getCacheInfo(String url) {
       return new CacheInfo();

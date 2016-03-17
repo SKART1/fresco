@@ -15,20 +15,18 @@ import java.io.OutputStream;
 public class DoubleSourceStream extends InputStream {
   private static final String TAG = DoubleSourceStream.class.getName();
 
-  private static final int INFINITY_LENGTH = -4567;
-
   private InputStream firstInputStream;
-  private final int firstInputStreamLength;
+  private final long firstInputStreamLength;
   private InputStream secondInputStream;
 
   private OutputStream firstOutputStream;
 
   private boolean firstEnds = false;
-  private int firstInputStreamTotalRead = 0;
-  private int secondInputStreamTotalRead = 0;
+  private long firstInputStreamTotalRead = 0;
+  private long secondInputStreamTotalRead = 0;
 
   public DoubleSourceStream(InputStream firstInputStream,
-                            int firstInputStreamLength, @NonNull InputStream secondInputStream,
+                            long firstInputStreamLength, @NonNull InputStream secondInputStream,
                             OutputStream firstOutputStream) {
     this.firstInputStream = firstInputStream;
     this.firstInputStreamLength = firstInputStreamLength;
@@ -107,7 +105,8 @@ public class DoubleSourceStream extends InputStream {
       int byteCountCorrected = byteCount;
 
       if(firstInputStreamTotalRead + byteCount >= firstInputStreamLength) {
-        byteCountCorrected = firstInputStreamLength - firstInputStreamTotalRead;
+        //bytesCorrected is always less or equals byteCount - so int
+        byteCountCorrected = (int) (firstInputStreamLength - firstInputStreamTotalRead);
         firstEnds = true;
 
         FLog.w(TAG, "FirstInputStream ended. Totally read " + firstInputStreamTotalRead);
@@ -128,6 +127,10 @@ public class DoubleSourceStream extends InputStream {
     if (bytesRead != -1) {
       secondInputStreamTotalRead += bytesRead;
       FLog.w(TAG, "Read from secondInputStream " + bytesRead + " bytes. Totally read from source: " + secondInputStreamTotalRead + " bytes");
+    } else {
+      FLog.w(TAG, "Finished. Totally read from firstInputStream: " + firstInputStreamTotalRead +
+               " bytes. Totally read from secondInputStream: " + secondInputStreamTotalRead +
+              " bytes. Total size: " + (firstInputStreamTotalRead+secondInputStreamTotalRead));
     }
 
     if (firstOutputStream != null && bytesRead != -1) {
