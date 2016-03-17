@@ -78,8 +78,9 @@ public class DiskCache implements DiskCacheInterface {
     //
     File fileInp = new File(cacheDir, String.valueOf(fileName));
 
-    if(fileInp.exists()) {
-      writeLock.acquireUninterruptibly();
+
+    writeLock.acquireUninterruptibly();
+    if (fileInp.exists()) {
       Boolean isProcessing = fileLocks.putIfAbsent(fileName, false);
 
       //Somebody have taken this file before us
@@ -88,7 +89,7 @@ public class DiskCache implements DiskCacheInterface {
         cacheInfo.setFileOffset(CacheInfo.NO_OFFSET);
         cacheInfo.setFile(null);
       } else {
-        if(keepCacheSmall()) {
+        if (keepCacheSmall()) {
           fileLocks.put(cacheInfo.getFileName(), true);
           cacheInfo.setFileOffset(fileInp.length());
           cacheInfo.setFile(fileInp);
@@ -98,13 +99,14 @@ public class DiskCache implements DiskCacheInterface {
           cacheInfo.setFile(null);
         }
       }
-      writeLock.release();
+
     } else {
-      //Atomic fileCreate will deal with this if there are multiply
-      //simultaneously not created files
+      //Who first created file - is his master
       cacheInfo.setFileOffset(0);
       cacheInfo.setFile(fileInp);
+      fileLocks.put(cacheInfo.getFileName(), true);
     }
+    writeLock.release();
 
     return cacheInfo;
   }
@@ -183,6 +185,11 @@ public class DiskCache implements DiskCacheInterface {
 
       if (cacheInfo.getFile().delete()) {
         fileLocks.remove(cacheInfo.getFileName());
+      } else {
+        //If file were not even created
+        if(!cacheInfo.getFile().exists()) {
+          fileLocks.remove(cacheInfo.getFileName());
+        }
       }
 
       writeLock.release();
